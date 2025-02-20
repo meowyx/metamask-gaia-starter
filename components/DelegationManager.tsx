@@ -16,18 +16,13 @@ import {
 import { createWalletClient, custom, toHex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { randomBytes } from "crypto";
+import { FACTORY_CONTRACT_ADDRESS, CREATE_TOKEN_SELECTOR } from "@/constants";
 
-// Define a minimal interface for Ethereum Provider
 // Define a minimal interface for Ethereum Provider
 interface EthereumProvider {
-    request: (args: {method: string; params?: unknown[]}) => Promise<unknown>;
-    on: (event: string, callback: (...args: unknown[]) => void) => void;
-  }
-
-// This address would be your ERC20 factory contract
-const FACTORY_CONTRACT_ADDRESS = "0xYourFactoryContractAddress" as `0x${string}`;
-// Function selector for deployToken
-const DEPLOY_TOKEN_SELECTOR = "0x7f4ee5f8" as const;
+  request: (args: {method: string; params?: unknown[]}) => Promise<unknown>;
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
+}
 
 export function DelegationManager() {
   const { address, isConnected } = useAccount();
@@ -107,7 +102,7 @@ export function DelegationManager() {
     }
   };
 
-  // Create delegation with caveats
+  // Create delegation with caveats specifically for your ERC20 factory
   const createDelegationWithCaveats = async () => {
     if (!delegatorAccount || !aiDelegateAccount) return;
     
@@ -116,10 +111,16 @@ export function DelegationManager() {
     
     try {
       // Build caveats that restrict what the AI can do
-      const caveats = createCaveatBuilder(delegatorAccount.environment)
-        .addCaveat("allowedTargets", [FACTORY_CONTRACT_ADDRESS])
-        .addCaveat("valueLte", BigInt(100000000000000000)) // 0.1 ETH max
-        .addCaveat("allowedMethods", [DEPLOY_TOKEN_SELECTOR]);
+      // These are specifically tailored to your ERC20Factory contract
+      // Build caveats that restrict what the AI can do
+// These are specifically tailored to your ERC20Factory contract
+const caveats = createCaveatBuilder(delegatorAccount.environment)
+// Only allow interaction with your factory contract
+.addCaveat("allowedTargets", [FACTORY_CONTRACT_ADDRESS])
+// Prevent ETH spending entirely since your createToken doesn't need ETH
+.addCaveat("valueLte", BigInt(0))
+// Only allow calling the createToken function
+.addCaveat("allowedMethods", [CREATE_TOKEN_SELECTOR]);
       
       // Create root delegation with a unique salt
       const newDelegation = createRootDelegation(
@@ -178,9 +179,9 @@ export function DelegationManager() {
         This allows the AI to create ERC20 tokens on your behalf, with strict limitations:
       </p>
       <ul className="list-disc pl-5 mt-1 text-sm text-gray-600">
-        <li>Can only interact with the specified token factory</li>
-        <li>Cannot spend more than 0.1 ETH per transaction</li>
-        <li>Can only call the token deployment function</li>
+        <li>Can only interact with the specified token factory contract</li>
+        <li>Cannot spend any of your ETH</li>
+        <li>Can only call the createToken function</li>
       </ul>
       
       {error && (
