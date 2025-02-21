@@ -17,7 +17,7 @@ import { createWalletClient, custom, toHex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { randomBytes } from "crypto";
 import { FACTORY_CONTRACT_ADDRESS, CREATE_TOKEN_SELECTOR } from "@/constants";
-
+import { storeDelegation } from "@/delegationStorage";
 // Define a minimal interface for Ethereum Provider
 interface EthereumProvider {
   request: (args: {method: string; params?: unknown[]}) => Promise<unknown>;
@@ -112,15 +112,13 @@ export function DelegationManager() {
     try {
       // Build caveats that restrict what the AI can do
       // These are specifically tailored to your ERC20Factory contract
-      // Build caveats that restrict what the AI can do
-// These are specifically tailored to your ERC20Factory contract
-const caveats = createCaveatBuilder(delegatorAccount.environment)
-// Only allow interaction with your factory contract
-.addCaveat("allowedTargets", [FACTORY_CONTRACT_ADDRESS])
-// Prevent ETH spending entirely since your createToken doesn't need ETH
-.addCaveat("valueLte", BigInt(0))
-// Only allow calling the createToken function
-.addCaveat("allowedMethods", [CREATE_TOKEN_SELECTOR]);
+      const caveats = createCaveatBuilder(delegatorAccount.environment)
+        // Only allow interaction with your factory contract
+        .addCaveat("allowedTargets", [FACTORY_CONTRACT_ADDRESS])
+        // Prevent ETH spending entirely since your createToken doesn't need ETH
+        .addCaveat("valueLte", BigInt(0))
+        // Only allow calling the createToken function
+        .addCaveat("allowedMethods", [CREATE_TOKEN_SELECTOR]);
       
       // Create root delegation with a unique salt
       const newDelegation = createRootDelegation(
@@ -141,6 +139,15 @@ const caveats = createCaveatBuilder(delegatorAccount.environment)
       };
       
       setDelegation(signedDelegation);
+      
+      // Store the delegation in the delegation storage service
+      try {
+        await storeDelegation(signedDelegation);
+        console.log("Delegation stored in delegation storage service");
+      } catch (storageError) {
+        console.error("Failed to store delegation in storage service:", storageError);
+        // Continue anyway since we have the delegation in memory
+      }
       
       // Calculate the delegation hash
       const delegationHash = await getDelegationHashOffchain(signedDelegation);
@@ -164,6 +171,9 @@ const caveats = createCaveatBuilder(delegatorAccount.environment)
       ));
       
       setDelegationComplete(true);
+      
+      // Trigger a storage event to notify other components
+      window.dispatchEvent(new Event('storage'));
     } catch (error: unknown) {
       console.error("Error creating delegation:", error);
       setError(`Failed to create delegation: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -235,7 +245,7 @@ const caveats = createCaveatBuilder(delegatorAccount.environment)
           </p>
           <div className="mt-3 p-2 bg-white rounded border border-green-100">
             <p className="text-xs text-gray-500">Delegation status:</p>
-            <p className="text-sm font-medium">Active</p>
+            <p className="text-sm font-medium">Active (Stored in delegation service)</p>
           </div>
         </div>
       )}

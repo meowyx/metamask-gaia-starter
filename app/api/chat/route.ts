@@ -6,8 +6,8 @@ export async function POST(request: Request) {
   const { messages } = await request.json();
 
   const openai = createOpenAI({
-    baseURL: 'https://llama8b.gaia.domains/v1',
-    apiKey: 'GAIA'
+    baseURL: process.env.GAIA_MODEL_BASE_URL,
+    apiKey: process.env.GAIA_API_KEY
   });
 
   try {
