@@ -1,414 +1,239 @@
-import { tool as createTool } from "ai";
-import { z } from "zod";
-import { publicClient } from "@/wagmi.config";
-import { 
-  formatEther, 
-  parseEther, 
-  http, 
-  Hex, 
-  Address, 
-  encodeFunctionData 
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { sepolia } from "viem/chains";
+import type { Hex } from "viem";
+import type { DelegationStruct } from "@metamask-private/delegator-core-viem";
 import {
-  DelegationFramework,
-  SINGLE_DEFAULT_MODE,
-  createExecution,
-  Implementation,
-  toMetaMaskSmartAccount,
-  getDelegationHashOffchain,
-  type DelegationStruct
+  DelegationStorageClient,
+  DelegationStoreFilter,
+  DelegationStorageEnvironment,
 } from "@metamask-private/delegator-core-viem";
-import {
-  createBundlerClient,
-  createPaymasterClient,
-} from "viem/account-abstraction";
-import { 
-  FACTORY_CONTRACT_ADDRESS, 
-  FACTORY_ABI, 
-  BUNDLER_URL, 
-  CHAIN_ID 
-} from "@/constants";
-import {
-  getDelegationChain,
-  fetchDelegations,
-  DelegationStoreFilter
-} from "@/delegationStorage";
 
-// Define Linea Sepolia network configuration
-export const lineaSepolia = {
-  id: 59141,
-  name: 'Linea Sepolia',
-  network: 'linea-sepolia',
-  nativeCurrency: {
-    decimals: 18,
-    name: 'Linea Ether',
-    symbol: 'ETH',
-  },
-  rpcUrls: {
-    public: { http: ['https://rpc.sepolia.linea.build'] },
-    default: { http: ['https://rpc.sepolia.linea.build'] },
-  },
-  blockExplorers: {
-    etherscan: { name: 'Lineascan', url: 'https://sepolia.lineascan.build' },
-    default: { name: 'Lineascan', url: 'https://sepolia.lineascan.build' },
-  },
+// Delegation Storage Singleton
+let delegationStorageInstance: DelegationStorageClient | null = null;
+
+// Helper function to log storage configuration
+const logStorageConfig = (apiKey?: string, apiKeyId?: string) => {
+  console.group("=== Delegation Storage Configuration ===");
+  console.log("API Key format check:", {
+    exists: !!apiKey,
+    length: apiKey?.length,
+    firstChars: apiKey?.substring(0, 4),
+    lastChars: apiKey?.substring(apiKey.length - 4),
+    hasSpecialChars: apiKey?.match(/[^a-zA-Z0-9]/) ? true : false,
+  });
+  console.log("API Key ID format check:", {
+    exists: !!apiKeyId,
+    length: apiKeyId?.length,
+    firstChars: apiKeyId?.substring(0, 4),
+    lastChars: apiKeyId?.substring(apiKeyId.length - 4),
+    hasSpecialChars: apiKeyId?.match(/[^a-zA-Z0-9]/) ? true : false,
+  });
+  console.log("Environment:", DelegationStorageEnvironment.dev);
+  console.log("Running on:", typeof window !== "undefined" ? "client" : "server");
+  console.groupEnd();
 };
 
-// Select the appropriate chain based on CHAIN_ID
-const selectedChain = CHAIN_ID === 59141 ? lineaSepolia : sepolia;
+/**
+ * Gets the delegation storage client, initializing it if necessary
+ * @returns A configured DelegationStorageClient instance
+ */
+export const getDelegationStorageClient = (): DelegationStorageClient => {
+  if (!delegationStorageInstance) {
+    const apiKey = process.env.NEXT_PUBLIC_DELEGATION_STORAGE_API_KEY;
+    const apiKeyId = process.env.NEXT_PUBLIC_DELEGATION_STORAGE_API_KEY_ID;
 
-// Initialize bundler client if URL is available
-const bundlerClient = BUNDLER_URL 
-  ? createBundlerClient({
-      transport: http(BUNDLER_URL),
-      chain: selectedChain,
-      paymaster: createPaymasterClient({
-        transport: http(BUNDLER_URL),
-      }),
-    })
-  : null;
+    logStorageConfig(apiKey, apiKeyId);
 
-// Helper function to safely access storage (works in browser and server contexts)
-const getStorageItem = (key: string): string | null => {
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    return sessionStorage.getItem(key);
+    if (!apiKey || !apiKeyId) {
+      throw new Error("Delegation storage API key and key ID are required");
+    }
+
+    try {
+      delegationStorageInstance = new DelegationStorageClient({
+        apiKey,
+        apiKeyId,
+        environment: DelegationStorageEnvironment.dev,
+        fetcher: typeof window !== "undefined" ? window.fetch.bind(window) : undefined,
+      });
+      console.log("DelegationStorageClient initialized successfully");
+    } catch (error) {
+      console.error("Error creating DelegationStorageClient:", error);
+      throw error;
+    }
   }
-  return null;
+  return delegationStorageInstance;
 };
 
-// Helper function to parse delegation with proper BigInt handling
-const parseDelegation = (delegationStr: string): DelegationStruct => {
-  const parsed = JSON.parse(delegationStr);
+/**
+ * Stores a delegation in the delegation storage service
+ * @param delegation The delegation to store
+ * @returns The result of the store operation
+ */
+export const storeDelegation = async (delegation: DelegationStruct) => {
+  try {
+    console.group("=== Storing Delegation ===");
+    console.log("Delegation details:", {
+      delegate: delegation.delegate,
+      delegator: delegation.delegator,
+      hasSignature: !!delegation.signature,
+      salt: delegation.salt.toString(),
+    });
+
+    const delegationStorageClient = getDelegationStorageClient();
+    const result = await delegationStorageClient.storeDelegation(delegation);
+
+    console.log("Delegation stored successfully:", result);
+    console.groupEnd();
+    return result;
+  } catch (error: any) {
+    console.error("Delegation storage error:", {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      details: error.details,
+      stack: error.stack,
+    });
+    console.groupEnd();
+    throw error;
+  }
+};
+
+/**
+ * Retrieves a delegation chain by its hash
+ * @param hash The hash of the delegation chain to retrieve
+ * @returns The delegation chain
+ */
+export const getDelegationChain = async (hash: Hex) => {
+  try {
+    console.log("Fetching delegation chain for hash:", hash);
+    const delegationStorageClient = getDelegationStorageClient();
+    const result = await delegationStorageClient.getDelegationChain(hash);
+    console.log("Delegation chain fetched:", result);
+    return result;
+  } catch (error) {
+    console.error("Error fetching delegation chain:", error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches delegations for a specific address
+ * @param address The address to fetch delegations for
+ * @param filter Whether to fetch given or received delegations
+ * @returns The delegations for the address
+ */
+export const fetchDelegations = async (
+  address: Hex,
+  filter: DelegationStoreFilter,
+) => {
+  try {
+    console.log("Fetching delegations for address:", address, "filter:", filter);
+    const delegationStorageClient = getDelegationStorageClient();
+    const result = await delegationStorageClient.fetchDelegations(address, filter);
+    console.log("Delegations fetched:", result);
+    return result;
+  } catch (error) {
+    console.error("Error fetching delegations:", error);
+    throw error;
+  }
+};
+
+/**
+ * Gets delegation info from session storage (if available)
+ * @returns The delegation info or null if not found
+ */
+export const getDelegationInfoFromSession = () => {
+  if (typeof window === "undefined") return null;
   
-  // Handle BigInt values
-  return {
-    ...parsed,
-    salt: BigInt(parsed.salt),
-    // Any other BigInt fields that need to be reconstructed
-  };
+  try {
+    const delegationInfoStr = sessionStorage.getItem('aiDelegateInfo');
+    if (!delegationInfoStr) return null;
+    
+    return JSON.parse(delegationInfoStr);
+  } catch (error) {
+    console.error("Error retrieving delegation info from session:", error);
+    return null;
+  }
 };
 
-// Get the appropriate block explorer URL based on the selected chain
-const getExplorerUrl = (transactionHash: string): string => {
-  const baseUrl = selectedChain.blockExplorers?.default?.url || 'https://sepolia.etherscan.io';
-  return `${baseUrl}/tx/${transactionHash}`;
+/**
+ * Gets the full delegation from session storage (if available)
+ * @returns The full delegation or null if not found
+ */
+export const getFullDelegationFromSession = () => {
+  if (typeof window === "undefined") return null;
+  
+  try {
+    const delegationStr = sessionStorage.getItem('delegation');
+    if (!delegationStr) return null;
+    
+    const delegation = JSON.parse(delegationStr);
+    
+    // Convert string salt back to BigInt
+    if (delegation && typeof delegation.salt === 'string') {
+      delegation.salt = BigInt(delegation.salt);
+    }
+    
+    return delegation;
+  } catch (error) {
+    console.error("Error retrieving delegation from session:", error);
+    return null;
+  }
 };
 
-// Get the appropriate token explorer URL based on the selected chain
-const getTokenExplorerUrl = (tokenAddress: string): string => {
-  const baseUrl = selectedChain.blockExplorers?.default?.url || 'https://sepolia.etherscan.io';
-  return `${baseUrl}/token/${tokenAddress}`;
+/**
+ * Clears delegation info from session storage
+ */
+export const clearDelegationSession = () => {
+  if (typeof window === "undefined") return;
+  
+  sessionStorage.removeItem('aiDelegateInfo');
+  sessionStorage.removeItem('delegation');
+  sessionStorage.removeItem('aiDelegatePrivateKey');
 };
 
-export const balanceTool = createTool({
-  description: "Request the account balance of the user",
-  parameters: z.object({
-    address: z.string().describe("The address of the user"),
-  }),
-  execute: async ({ address }) => {
-    try {
-      const balance = await publicClient.getBalance({
-        address: address as `0x${string}`,
-      });
-      return { 
-        balance: formatEther(balance),
-        chainName: selectedChain.name
-      };
-    } catch (error: unknown) {
-      console.error("Error fetching balance:", error);
-      return { 
-        balance: "0",
-        chainName: selectedChain.name,
-        error: error instanceof Error ? error.message : "Unknown error occurred"
-      };
+// Export the AI tool definition
+export const tools = [
+  {
+    name: "fetchDelegations",
+    description: "Fetch delegations for a wallet address",
+    parameters: {
+      type: "object",
+      properties: {
+        address: {
+          type: "string",
+          description: "The wallet address to fetch delegations for (must be a valid Ethereum address starting with 0x)"
+        },
+        filter: {
+          type: "string",
+          enum: ["Given", "Received"],
+          description: "Whether to fetch delegations given by this address or received by this address"
+        }
+      },
+      required: ["address", "filter"]
     }
   },
-});
-
-export const sendTransactionTool = createTool({
-  description:
-    "You're going to provide a button that will initiate a transaction to the wallet address the user provided, you are not going to send the transaction",
-  parameters: z.object({
-    to: z.string().describe("The wallet address of the user"),
-    amount: z.string().describe("The amount of eth the transaction"),
-  }),
-  execute: async ({ to, amount }) => {
-    try {
-      // Validate the address format
-      if (!to.startsWith('0x') || to.length !== 42) {
-        return { 
-          success: false,
-          error: "Invalid Ethereum address format" 
-        };
-      }
-      
-      // Validate the amount format
-      if (isNaN(Number(amount)) || Number(amount) <= 0) {
-        return {
-          success: false,
-          error: "Amount must be a positive number"
-        };
-      }
-      
-      return { 
-        success: true,
-        to, 
-        amount,
-        chainName: selectedChain.name 
-      };
-    } catch (error: unknown) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error occurred"
-      };
+  {
+    name: "createToken",
+    description: "Create a token using delegated permissions",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Name of the token to create"
+        },
+        symbol: {
+          type: "string",
+          description: "Symbol of the token (usually 3-4 characters)"
+        },
+        totalSupply: {
+          type: "string",
+          description: "Total supply of the token (as a string representing the number of tokens)"
+        }
+      },
+      required: ["name", "symbol", "totalSupply"]
     }
-  },
-});
+  }
+];
 
-// Tool for deploying ERC20 tokens through delegation
-export const deployERC20Tool = createTool({
-  description: "Deploy a new ERC20 token using the delegated permission from the user. Only use this if the user has set up delegation.",
-  parameters: z.object({
-    name: z.string().min(1).max(50).describe("The name of the ERC20 token"),
-    symbol: z.string().min(1).max(8).describe("The symbol of the ERC20 token (max 8 characters)"),
-    initialSupply: z.string().min(1).describe("The initial supply of tokens (in whole tokens)"),
-  }),
-  execute: async ({ name, symbol, initialSupply }) => {
-    try {
-      // Check if necessary configuration exists
-      if (!FACTORY_CONTRACT_ADDRESS) {
-        return {
-          success: false,
-          error: "Factory contract address not configured. Please check environment variables."
-        };
-      }
-      
-      if (!bundlerClient) {
-        return {
-          success: false,
-          error: "Bundler service not configured. Please check the BUNDLER_URL environment variable."
-        };
-      }
-      
-      // Check if delegation info is available
-      const delegateInfoStr = getStorageItem('aiDelegateInfo');
-      const delegationStr = getStorageItem('delegation');
-      const privateKeyStr = getStorageItem('aiDelegatePrivateKey');
-      
-      if (!delegateInfoStr || !privateKeyStr) {
-        return { 
-          success: false, 
-          error: "Delegation not set up. Please set up delegation first." 
-        };
-      }
-      
-      // Parse delegate info
-      const delegateInfo = JSON.parse(delegateInfoStr);
-      
-      // Recreate the AI account
-      const aiAccount = privateKeyToAccount(privateKeyStr as `0x${string}`);
-      
-      // Recreate the smart account
-      const aiSmartAccount = await toMetaMaskSmartAccount({
-        client: publicClient,
-        implementation: Implementation.Hybrid,
-        signatory: { account: aiAccount },
-      });
-      
-      // Try to get delegation from different sources
-      let parsedDelegation: DelegationStruct | undefined;
-      
-      // First try session storage
-      if (delegationStr) {
-        parsedDelegation = parseDelegation(delegationStr);
-        console.log("Using delegation from session storage");
-      } 
-      // Then try delegation storage service by hash
-      else if (delegateInfo.delegationHash) {
-        try {
-          console.log("Trying to fetch delegation by hash from storage service");
-          const delegationChain = await getDelegationChain(delegateInfo.delegationHash);
-          if (delegationChain && delegationChain.length > 0) {
-            parsedDelegation = delegationChain[0];
-            console.log("Found delegation in storage service by hash");
-          }
-        } catch (error) {
-          console.error("Error retrieving delegation by hash:", error);
-        }
-      }
-      
-      // Lastly try delegation storage service by address
-      if (!parsedDelegation) {
-        try {
-          console.log("Trying to fetch delegations by address from storage service");
-          const delegations = await fetchDelegations(
-            aiAccount.address,
-            DelegationStoreFilter.Received
-          );
-          
-          if (delegations && delegations.length > 0) {
-            // Use the most recent delegation
-            parsedDelegation = delegations[0];
-            console.log("Found delegation in storage service by address");
-          }
-        } catch (error) {
-          console.error("Error retrieving delegations by address:", error);
-        }
-      }
-      
-      if (!parsedDelegation) {
-        return {
-          success: false,
-          error: "Could not find any delegation. Please set up delegation again."
-        };
-      }
-      
-      // Encode the call to the factory contract
-      const createTokenCalldata = encodeFunctionData({
-        abi: FACTORY_ABI,
-        functionName: 'createToken',
-        args: [name, symbol, parseEther(initialSupply)]
-      });
-      
-      // Create the execution for the delegation
-      const execution = createExecution({
-        target: FACTORY_CONTRACT_ADDRESS,
-        value: 0n, // Your contract doesn't require ETH to create tokens
-        callData: createTokenCalldata,
-      });
-      
-      // Encode the redemption of the delegation
-      const redeemDelegationCalldata = DelegationFramework.encode.redeemDelegations(
-        [[parsedDelegation]],
-        [SINGLE_DEFAULT_MODE],
-        [[execution]]
-      );
-      
-      // Send the user operation
-      const userOpHash = await bundlerClient.sendUserOperation({
-        account: aiSmartAccount,
-        calls: [
-          {
-            to: aiSmartAccount.address,
-            data: redeemDelegationCalldata,
-          },
-        ],
-      });
-      
-      // Wait for receipt
-      const receipt = await bundlerClient.waitForUserOperationReceipt({
-        hash: userOpHash,
-      });
-      
-      // Extract the created token address from event logs
-      let tokenAddress = '';
-      try {
-        // Look through transaction logs for the TokenCreated event
-        const logs = await publicClient.getLogs({
-          address: FACTORY_CONTRACT_ADDRESS,
-          event: {
-            type: 'event',
-            name: 'TokenCreated',
-            inputs: [
-              { indexed: true, name: 'tokenAddress', type: 'address' },
-              { indexed: false, name: 'name', type: 'string' },
-              { indexed: false, name: 'symbol', type: 'string' },
-              { indexed: false, name: 'initialSupply', type: 'uint256' },
-              { indexed: false, name: 'owner', type: 'address' }
-            ]
-          },
-          fromBlock: receipt.receipt.blockNumber,
-          toBlock: receipt.receipt.blockNumber
-        });
-        
-        if (logs.length > 0) {
-          tokenAddress = logs[0].args.tokenAddress as string;
-        }
-      } catch (error) {
-        console.error("Error extracting token address:", error);
-        // Continue even if we can't extract the address
-      }
-      
-      const explorerUrl = getExplorerUrl(receipt.receipt.transactionHash);
-      const tokenExplorerUrl = tokenAddress ? getTokenExplorerUrl(tokenAddress) : '';
-      
-      // Store token info in localStorage for history tracking
-      if (tokenAddress) {
-        const tokenInfo = {
-          name,
-          symbol,
-          address: tokenAddress,
-          transactionHash: receipt.receipt.transactionHash,
-          createdAt: new Date().toISOString()
-        };
-        
-        localStorage.setItem(`token_${tokenAddress.toLowerCase()}`, JSON.stringify(tokenInfo));
-      }
-      
-      return {
-        success: true,
-        transactionHash: receipt.receipt.transactionHash,
-        userOpHash: receipt.userOpHash,
-        tokenName: name,
-        tokenSymbol: symbol,
-        tokenAddress: tokenAddress || 'Address extraction failed',
-        explorerUrl,
-        tokenExplorerUrl,
-        chainName: selectedChain.name,
-        chainId: selectedChain.id
-      };
-      
-    } catch (error: unknown) {
-      console.error("Error deploying ERC20:", error);
-      
-      // Provide meaningful error messages based on error type
-      if (error instanceof Error) {
-        // Check for common errors
-        if (error.message.includes("insufficient funds")) {
-          return {
-            success: false,
-            error: "Insufficient funds to deploy token. The operation requires gas."
-          };
-        } else if (error.message.includes("user denied")) {
-          return {
-            success: false,
-            error: "Transaction was rejected by the user."
-          };
-        } else if (error.message.includes("delegation")) {
-          return {
-            success: false,
-            error: "Delegation error. The AI might not have permission to perform this action."
-          };
-        } else if (error.message.includes("network")) {
-          return {
-            success: false,
-            error: `Network error. Please make sure you're connected to ${selectedChain.name}.`
-          };
-        } else if (error.message.includes("chain")) {
-          return {
-            success: false,
-            error: `Chain mismatch. Please switch to ${selectedChain.name} (Chain ID: ${selectedChain.id}).`
-          };
-        }
-        
-        return {
-          success: false,
-          error: error.message
-        };
-      }
-      
-      return {
-        success: false,
-        error: "Failed to deploy token. An unknown error occurred."
-      };
-    }
-  },
-});
-
-export const tools = {
-  displayBalance: balanceTool,
-  sendTransaction: sendTransactionTool,
-  deployERC20: deployERC20Tool,
-};
+// Export store filter enum for use in components
+export { DelegationStoreFilter };

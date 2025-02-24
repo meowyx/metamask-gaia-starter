@@ -18,6 +18,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { randomBytes } from "crypto";
 import { FACTORY_CONTRACT_ADDRESS, CREATE_TOKEN_SELECTOR } from "@/constants";
 import { storeDelegation } from "@/delegationStorage";
+
 // Define a minimal interface for Ethereum Provider
 interface EthereumProvider {
   request: (args: {method: string; params?: unknown[]}) => Promise<unknown>;
@@ -57,18 +58,22 @@ export function DelegationManager() {
     setError(null);
     
     try {
+      console.group('=== Setting up Delegation Accounts ===');
+      
       // For delegator account, we'll use the connected wallet
       const provider = (window as Window & { ethereum?: EthereumProvider }).ethereum;
       if (!provider) {
         throw new Error("No provider found. Please make sure MetaMask is installed and connected.");
       }
       
+      console.log('Creating wallet client for address:', address);
       const walletClient = createWalletClient({
         transport: custom(provider),
         account: address as `0x${string}`
       });
       
       // Create delegator smart account
+      console.log('Creating delegator smart account...');
       const delegatorSmartAccount = await toMetaMaskSmartAccount({
         client: publicClient,
         implementation: Implementation.Hybrid,
@@ -76,8 +81,10 @@ export function DelegationManager() {
         deploySalt: createSalt(),
         signatory: { walletClient },
       });
+      console.log('Delegator account created:', delegatorSmartAccount.address);
       
       // Create AI delegate account with a burner key
+      console.log('Creating AI delegate account...');
       const aiPrivateKey = generatePrivateKey();
       const aiAccount = privateKeyToAccount(aiPrivateKey);
       
@@ -88,21 +95,25 @@ export function DelegationManager() {
         deploySalt: createSalt(),
         signatory: { account: aiAccount },
       });
+      console.log('AI delegate account created:', aiSmartAccount.address);
       
       // Store the AI account private key securely
       sessionStorage.setItem('aiDelegatePrivateKey', aiPrivateKey);
+      console.log('AI private key stored in session storage');
       
       setDelegatorAccount(delegatorSmartAccount);
       setAiDelegateAccount(aiSmartAccount);
+      console.groupEnd();
     } catch (error: unknown) {
       console.error("Error setting up accounts:", error);
       setError(`Failed to set up accounts: ${error instanceof Error ? error.message : "Unknown error"}`);
+      console.groupEnd();
     } finally {
       setIsCreatingAccounts(false);
     }
   };
 
-  // Create delegation with caveats specifically for your ERC20 factory
+  // Create delegation with caveats
   const createDelegationWithCaveats = async () => {
     if (!delegatorAccount || !aiDelegateAccount) return;
     
@@ -110,17 +121,30 @@ export function DelegationManager() {
     setError(null);
     
     try {
+      console.group('=== Creating Delegation with Caveats ===');
+      
+      // Add diagnostic logging
+      console.log('FACTORY_CONTRACT_ADDRESS raw value:', FACTORY_CONTRACT_ADDRESS);
+      console.log('FACTORY_CONTRACT_ADDRESS type:', typeof FACTORY_CONTRACT_ADDRESS);
+      console.log('FACTORY_CONTRACT_ADDRESS length:', FACTORY_CONTRACT_ADDRESS?.length);
+      console.log('Starts with 0x?', FACTORY_CONTRACT_ADDRESS?.startsWith('0x'));
+      console.log('Address matches format?', /^0x[a-fA-F0-9]{40}$/.test(FACTORY_CONTRACT_ADDRESS || ''));
+      
       // Build caveats that restrict what the AI can do
-      // These are specifically tailored to your ERC20Factory contract
+      console.log('Building caveats...');
       const caveats = createCaveatBuilder(delegatorAccount.environment)
-        // Only allow interaction with your factory contract
-        .addCaveat("allowedTargets", [FACTORY_CONTRACT_ADDRESS])
-        // Prevent ETH spending entirely since your createToken doesn't need ETH
+        .addCaveat("allowedTargets", [FACTORY_CONTRACT_ADDRESS as `0x${string}`])
         .addCaveat("valueLte", BigInt(0))
-        // Only allow calling the createToken function
         .addCaveat("allowedMethods", [CREATE_TOKEN_SELECTOR]);
       
+      console.log('Caveats created:', {
+        allowedTargets: [FACTORY_CONTRACT_ADDRESS],
+        valueLte: '0',
+        allowedMethods: [CREATE_TOKEN_SELECTOR]
+      });
+      
       // Create root delegation with a unique salt
+      console.log('Creating root delegation...');
       const newDelegation = createRootDelegation(
         aiDelegateAccount.address,
         delegatorAccount.address,
@@ -129,6 +153,7 @@ export function DelegationManager() {
       );
       
       // Sign the delegation using the delegator account
+      console.log('Signing delegation...');
       const signature = await delegatorAccount.signDelegation({ 
         delegation: newDelegation 
       });
@@ -138,18 +163,22 @@ export function DelegationManager() {
         signature
       };
       
+      console.log('Delegation signed successfully');
+      
       setDelegation(signedDelegation);
       
       // Store the delegation in the delegation storage service
       try {
+        console.log('Storing delegation in storage service...');
         await storeDelegation(signedDelegation);
-        console.log("Delegation stored in delegation storage service");
-      } catch (storageError) {
-        console.error("Failed to store delegation in storage service:", storageError);
-        // Continue anyway since we have the delegation in memory
+        console.log('Delegation stored in storage service successfully');
+      } catch (storageError: any) {
+        console.error('Failed to store delegation in storage service:', storageError);
+        setError('Warning: Remote storage failed, but proceeding with local storage');
       }
       
       // Calculate the delegation hash
+      console.log('Calculating delegation hash...');
       const delegationHash = await getDelegationHashOffchain(signedDelegation);
       
       // Store delegation information
@@ -160,6 +189,7 @@ export function DelegationManager() {
       };
       
       // Store for the chat context
+      console.log('Storing delegation info in session storage...');
       sessionStorage.setItem('aiDelegateInfo', JSON.stringify(delegationInfo));
       
       // Store the full delegation for later use - handle BigInt serialization
@@ -171,12 +201,12 @@ export function DelegationManager() {
       ));
       
       setDelegationComplete(true);
-      
-      // Trigger a storage event to notify other components
-      window.dispatchEvent(new Event('storage'));
+      console.log('Delegation process completed successfully');
+      console.groupEnd();
     } catch (error: unknown) {
       console.error("Error creating delegation:", error);
       setError(`Failed to create delegation: ${error instanceof Error ? error.message : "Unknown error"}`);
+      console.groupEnd();
     } finally {
       setIsCreatingDelegation(false);
     }

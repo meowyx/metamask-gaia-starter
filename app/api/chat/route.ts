@@ -1,6 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
-import { tools } from "@/ai/tools";
 
 export async function POST(request: Request) {
   const { messages } = await request.json();
@@ -11,17 +10,18 @@ export async function POST(request: Request) {
   });
 
   try {
+    // Simple version without tools
     const result = streamText({
       model: openai("llama"),
-      system: "you are a friendly assistant",
+      system: "You are a helpful assistant.",
       messages,
-      maxSteps: 5,
-      tools,
     });
 
     return result.toDataStreamResponse();
   } catch (error) {
-    console.error(error);
+    console.error("Error in chat API route:", error);
+    // Add more detailed error logging
+    console.log("Error details:", JSON.stringify(error, null, 2));
     return new Response("Internal server error", { status: 500 });
   }
 }
