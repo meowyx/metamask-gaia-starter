@@ -123,10 +123,17 @@ export function DelegationManager() {
     try {
       console.group('=== Creating Delegation with Caveats ===');
       
+      // Add diagnostic logging
+      console.log('FACTORY_CONTRACT_ADDRESS raw value:', FACTORY_CONTRACT_ADDRESS);
+      console.log('FACTORY_CONTRACT_ADDRESS type:', typeof FACTORY_CONTRACT_ADDRESS);
+      console.log('FACTORY_CONTRACT_ADDRESS length:', FACTORY_CONTRACT_ADDRESS?.length);
+      console.log('Starts with 0x?', FACTORY_CONTRACT_ADDRESS?.startsWith('0x'));
+      console.log('Address matches format?', /^0x[a-fA-F0-9]{40}$/.test(FACTORY_CONTRACT_ADDRESS || ''));
+      
       // Build caveats that restrict what the AI can do
       console.log('Building caveats...');
       const caveats = createCaveatBuilder(delegatorAccount.environment)
-        .addCaveat("allowedTargets", [FACTORY_CONTRACT_ADDRESS])
+        .addCaveat("allowedTargets", [FACTORY_CONTRACT_ADDRESS as `0x${string}`])
         .addCaveat("valueLte", BigInt(0))
         .addCaveat("allowedMethods", [CREATE_TOKEN_SELECTOR]);
       

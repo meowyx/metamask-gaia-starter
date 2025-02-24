@@ -3,29 +3,29 @@ import type { DelegationStruct } from "@metamask-private/delegator-core-viem";
 import {
   DelegationStorageClient,
   DelegationStoreFilter,
-  DelegationStorageEnvironment
+  DelegationStorageEnvironment,
 } from "@metamask-private/delegator-core-viem";
 
 let instance: DelegationStorageClient | null = null;
 
 const logStorageConfig = (apiKey?: string, apiKeyId?: string) => {
-  console.group('=== Delegation Storage Configuration ===');
-  console.log('API Key format check:', {
+  console.group("=== Delegation Storage Configuration ===");
+  console.log("API Key format check:", {
     exists: !!apiKey,
     length: apiKey?.length,
     firstChars: apiKey?.substring(0, 4),
     lastChars: apiKey?.substring(apiKey.length - 4),
-    hasSpecialChars: apiKey?.match(/[^a-zA-Z0-9]/) ? true : false
+    hasSpecialChars: apiKey?.match(/[^a-zA-Z0-9]/) ? true : false,
   });
-  console.log('API Key ID format check:', {
+  console.log("API Key ID format check:", {
     exists: !!apiKeyId,
     length: apiKeyId?.length,
     firstChars: apiKeyId?.substring(0, 4),
     lastChars: apiKeyId?.substring(apiKeyId.length - 4),
-    hasSpecialChars: apiKeyId?.match(/[^a-zA-Z0-9]/) ? true : false
+    hasSpecialChars: apiKeyId?.match(/[^a-zA-Z0-9]/) ? true : false,
   });
-  console.log('Environment:', DelegationStorageEnvironment.dev);
-  console.log('Running on:', typeof window !== 'undefined' ? 'client' : 'server');
+  console.log("Environment:", DelegationStorageEnvironment.dev);
+  console.log("Running on:", typeof window !== "undefined" ? "client" : "server");
   console.groupEnd();
 };
 
@@ -38,7 +38,7 @@ export const getDelegationStorageClient = (): DelegationStorageClient => {
     logStorageConfig(apiKey, apiKeyId);
 
     if (!apiKey || !apiKeyId) {
-      throw new Error('Delegation storage API key and key ID are required');
+      throw new Error("Delegation storage API key and key ID are required");
     }
 
     try {
@@ -46,11 +46,11 @@ export const getDelegationStorageClient = (): DelegationStorageClient => {
         apiKey,
         apiKeyId,
         environment: DelegationStorageEnvironment.dev,
-        fetcher: typeof window !== 'undefined' ? window.fetch.bind(window) : undefined,
+        // fetcher: typeof window !== "undefined" ? window.fetch.bind(window) : undefined,
       });
-      console.log('DelegationStorageClient initialized successfully');
+      console.log("DelegationStorageClient initialized successfully");
     } catch (error) {
-      console.error('Error creating DelegationStorageClient:', error);
+      console.error("Error creating DelegationStorageClient:", error);
       throw error;
     }
   }
@@ -59,27 +59,27 @@ export const getDelegationStorageClient = (): DelegationStorageClient => {
 
 export const storeDelegation = async (delegation: DelegationStruct) => {
   try {
-    console.group('=== Storing Delegation ===');
-    console.log('Delegation details:', {
+    console.group("=== Storing Delegation ===");
+    console.log("Delegation details:", {
       delegate: delegation.delegate,
       delegator: delegation.delegator,
       hasSignature: !!delegation.signature,
-      salt: delegation.salt.toString()
+      salt: delegation.salt.toString(),
     });
 
     const delegationStorageClient = getDelegationStorageClient();
     const result = await delegationStorageClient.storeDelegation(delegation);
-    
-    console.log('Delegation stored successfully:', result);
+
+    console.log("Delegation stored successfully:", result);
     console.groupEnd();
     return result;
   } catch (error: any) {
-    console.error('Delegation storage error:', {
+    console.error("Delegation storage error:", {
       name: error.name,
       message: error.message,
       status: error.status,
       details: error.details,
-      stack: error.stack
+      stack: error.stack,
     });
     console.groupEnd();
     throw error;
@@ -88,29 +88,29 @@ export const storeDelegation = async (delegation: DelegationStruct) => {
 
 export const getDelegationChain = async (hash: Hex) => {
   try {
-    console.log('Fetching delegation chain for hash:', hash);
+    console.log("Fetching delegation chain for hash:", hash);
     const delegationStorageClient = getDelegationStorageClient();
     const result = await delegationStorageClient.getDelegationChain(hash);
-    console.log('Delegation chain fetched:', result);
+    console.log("Delegation chain fetched:", result);
     return result;
   } catch (error) {
-    console.error('Error fetching delegation chain:', error);
+    console.error("Error fetching delegation chain:", error);
     throw error;
   }
 };
 
 export const fetchDelegations = async (
   address: Hex,
-  filter: typeof DelegationStoreFilter.Given | typeof DelegationStoreFilter.Received
+  filter: DelegationStoreFilter, // <-- Proper enum type
 ) => {
   try {
-    console.log('Fetching delegations for address:', address, 'filter:', filter);
+    console.log("Fetching delegations for address:", address, "filter:", filter);
     const delegationStorageClient = getDelegationStorageClient();
     const result = await delegationStorageClient.fetchDelegations(address, filter);
-    console.log('Delegations fetched:', result);
+    console.log("Delegations fetched:", result);
     return result;
   } catch (error) {
-    console.error('Error fetching delegations:', error);
+    console.error("Error fetching delegations:", error);
     throw error;
   }
 };
