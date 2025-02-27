@@ -1,10 +1,8 @@
 "use client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useChat } from "ai/react";
-import { useAccount, useSendTransaction } from "wagmi";
-import { parseEther, formatEther } from "viem";
-import { DelegationManager } from "@/components/DelegationManager";
+import { useChat } from "@ai-sdk/react";
+import { useAccount } from "wagmi";
 import { useState, useEffect } from "react";
 import { FACTORY_CONTRACT_ADDRESS, FACTORY_ABI } from "@/constants";
 import { publicClient } from "@/wagmi.config";
@@ -15,28 +13,30 @@ import { ExternalLinkIcon } from "@radix-ui/react-icons";
 export const Chat = () => {
   const { address } = useAccount();
   const [delegationEnabled, setDelegationEnabled] = useState(false);
-  const [createdTokens, setCreatedTokens] = useState<{
-    name: string;
-    symbol: string;
-    address: string;
-    transactionHash: string;
-  }[]>([]);
-  
+  const [createdTokens, setCreatedTokens] = useState<
+    {
+      name: string;
+      symbol: string;
+      address: string;
+      transactionHash: string;
+    }[]
+  >([]);
+
   // Check if delegation is set up
   useEffect(() => {
     const checkDelegation = () => {
-      const delegateInfo = sessionStorage.getItem('aiDelegateInfo');
+      const delegateInfo = sessionStorage.getItem("aiDelegateInfo");
       setDelegationEnabled(!!delegateInfo);
     };
-    
+
     // Check initially
     checkDelegation();
-    
+
     // Set up event listener to detect changes in session storage
-    window.addEventListener('storage', checkDelegation);
-    
+    window.addEventListener("storage", checkDelegation);
+
     return () => {
-      window.removeEventListener('storage', checkDelegation);
+      window.removeEventListener("storage", checkDelegation);
     };
   }, []);
 
@@ -50,33 +50,35 @@ export const Chat = () => {
   const loadCreatedTokens = async () => {
     try {
       // Get token count
-      const count = await publicClient.readContract({
+      const count = (await publicClient.readContract({
         address: FACTORY_CONTRACT_ADDRESS,
         abi: FACTORY_ABI,
-        functionName: 'getTokenCount',
-      }) as bigint;
-      
-      if (count > 0n) {
+        functionName: "getTokenCount",
+      })) as bigint;
+
+      if (count > BigInt(0)) {
         // Get all tokens
-        const tokenAddresses = await publicClient.readContract({
+        const tokenAddresses = (await publicClient.readContract({
           address: FACTORY_CONTRACT_ADDRESS,
           abi: FACTORY_ABI,
-          functionName: 'getAllTokens',
-        }) as `0x${string}`[];
-        
+          functionName: "getAllTokens",
+        })) as `0x${string}`[];
+
         // We'll check localStorage for any additional token info we've saved
         const newTokens = [];
-        
+
         for (const tokenAddress of tokenAddresses) {
           // Try to get token info from localStorage
-          const storedTokenInfo = localStorage.getItem(`token_${tokenAddress.toLowerCase()}`);
+          const storedTokenInfo = localStorage.getItem(
+            `token_${tokenAddress.toLowerCase()}`
+          );
           let tokenInfo = {
-            name: '',
-            symbol: '',
+            name: "",
+            symbol: "",
             address: tokenAddress,
-            transactionHash: ''
+            transactionHash: "",
           };
-          
+
           if (storedTokenInfo) {
             tokenInfo = JSON.parse(storedTokenInfo);
           } else {
@@ -85,43 +87,50 @@ export const Chat = () => {
               // Basic ERC20 ABI for name and symbol
               const minimalERC20ABI = [
                 {
-                  "inputs": [],
-                  "name": "name",
-                  "outputs": [{"internalType": "string", "name": "", "type": "string"}],
-                  "stateMutability": "view",
-                  "type": "function"
+                  inputs: [],
+                  name: "name",
+                  outputs: [
+                    { internalType: "string", name: "", type: "string" },
+                  ],
+                  stateMutability: "view",
+                  type: "function",
                 },
                 {
-                  "inputs": [],
-                  "name": "symbol",
-                  "outputs": [{"internalType": "string", "name": "", "type": "string"}],
-                  "stateMutability": "view",
-                  "type": "function"
-                }
+                  inputs: [],
+                  name: "symbol",
+                  outputs: [
+                    { internalType: "string", name: "", type: "string" },
+                  ],
+                  stateMutability: "view",
+                  type: "function",
+                },
               ];
-              
-              const name = await publicClient.readContract({
+
+              const name = (await publicClient.readContract({
                 address: tokenAddress,
                 abi: minimalERC20ABI,
-                functionName: 'name',
-              }) as string;
-              
-              const symbol = await publicClient.readContract({
+                functionName: "name",
+              })) as string;
+
+              const symbol = (await publicClient.readContract({
                 address: tokenAddress,
                 abi: minimalERC20ABI,
-                functionName: 'symbol',
-              }) as string;
-              
+                functionName: "symbol",
+              })) as string;
+
               tokenInfo.name = name;
               tokenInfo.symbol = symbol;
             } catch (error) {
-              console.log(`Couldn't fetch token info for ${tokenAddress}`);
+              console.log(
+                `Couldn't fetch token info for ${tokenAddress}`,
+                error
+              );
             }
           }
-          
+
           newTokens.push(tokenInfo);
         }
-        
+
         setCreatedTokens(newTokens);
       }
     } catch (error) {
@@ -135,33 +144,41 @@ export const Chat = () => {
         {
           role: "system",
           content: `You have connected your wallet successfully. Your wallet address is ${address}. ${
-            delegationEnabled 
-              ? "You have delegated token creation permissions to me. I can deploy ERC20 tokens on your behalf through a factory contract. Just ask me to create a token and specify the name, symbol, and initial supply." 
+            delegationEnabled
+              ? "You have delegated token creation permissions to me. I can deploy ERC20 tokens on your behalf through a factory contract. Just ask me to create a token and specify the name, symbol, and initial supply."
               : "You can delegate token creation permissions to me using the delegation manager above. Once set up, I'll be able to create custom ERC20 tokens for you with limited permissions."
           }`,
           id: "system",
         },
       ],
     });
-    
-  const { data: hash, sendTransaction } = useSendTransaction();
-  
+
   // Save token info to localStorage when a new token is deployed
   useEffect(() => {
-    messages.forEach(message => {
+    messages.forEach((message) => {
       if (message.toolInvocations) {
-        message.toolInvocations.forEach(toolInvocation => {
-          if (toolInvocation.toolName === "deployERC20" && toolInvocation.state === "result") {
+        message.toolInvocations.forEach((toolInvocation) => {
+          if (
+            toolInvocation.toolName === "deployERC20" &&
+            toolInvocation.state === "result"
+          ) {
             const { result } = toolInvocation;
-            if (result.success && result.tokenAddress && result.tokenAddress !== 'Address extraction failed') {
+            if (
+              result.success &&
+              result.tokenAddress &&
+              result.tokenAddress !== "Address extraction failed"
+            ) {
               // Save token info to localStorage
-              localStorage.setItem(`token_${result.tokenAddress.toLowerCase()}`, JSON.stringify({
-                name: result.tokenName,
-                symbol: result.tokenSymbol,
-                address: result.tokenAddress,
-                transactionHash: result.transactionHash
-              }));
-              
+              localStorage.setItem(
+                `token_${result.tokenAddress.toLowerCase()}`,
+                JSON.stringify({
+                  name: result.tokenName,
+                  symbol: result.tokenSymbol,
+                  address: result.tokenAddress,
+                  transactionHash: result.transactionHash,
+                })
+              );
+
               // Reload tokens to update the list
               loadCreatedTokens();
             }
@@ -170,11 +187,9 @@ export const Chat = () => {
       }
     });
   }, [messages]);
-  
+
   return (
     <div className="h-full w-full space-y-6 max-w-3xl">
-      <DelegationManager />
-      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
           <div className="border h-[400px] rounded-md p-4 space-y-6 overflow-y-auto">
@@ -196,128 +211,11 @@ export const Chat = () => {
                   </div>
                 )}
                 <div className="mt-2">
-                  {message.toolInvocations?.map((toolInvocation) => {
-                    const { toolName, toolCallId, state } = toolInvocation;
-                    if (state === "result") {
-                      if (toolName === "sendTransaction") {
-                        const {
-                          result,
-                        }: { result: { to: string; amount: string } } =
-                          toolInvocation;
-                        if (isLoading) {
-                          return (
-                            <div key={toolCallId}>
-                              <p>Loading...</p>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={toolCallId} className="flex justify-end">
-                            <Card className="w-fit max-w-[80%]">
-                              <CardContent className="pt-6">
-                                <Button
-                                  variant="default"
-                                  onClick={() =>
-                                    sendTransaction({
-                                      to: result.to as `0x${string}`,
-                                      value: parseEther(result.amount),
-                                    })
-                                  }
-                                  className="w-full mb-2"
-                                >
-                                  Send {result.amount} ETH
-                                </Button>
-                                <p className="text-sm text-gray-500">
-                                  {hash
-                                    ? `Transaction sent: ${hash}`
-                                    : "Click the button to confirm"}
-                                </p>
-                              </CardContent>
-                            </Card>
-                          </div>
-                        );
-                      } else if (toolName === "deployERC20") {
-                        const { result } = toolInvocation;
-                        return (
-                          <div key={toolCallId} className="flex justify-end">
-                            <Card className={`w-fit max-w-[80%] ${result.success ? "border-green-200" : "border-red-200"}`}>
-                              <CardHeader className={result.success ? "bg-green-50 dark:bg-green-900/20" : "bg-red-50 dark:bg-red-900/20"}>
-                                <CardTitle className={`text-base ${result.success ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"}`}>
-                                  {result.success ? "Token Deployed Successfully!" : "Token Deployment Failed"}
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent className="pt-4">
-                                {result.success ? (
-                                  <div className="space-y-2">
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Name</p>
-                                        <p className="font-medium">{result.tokenName}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Symbol</p>
-                                        <p className="font-medium">{result.tokenSymbol}</p>
-                                      </div>
-                                    </div>
-                                    {result.tokenAddress && result.tokenAddress !== 'Address extraction failed' && (
-                                      <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Token Address</p>
-                                        <p className="font-mono text-xs break-all">{result.tokenAddress}</p>
-                                      </div>
-                                    )}
-                                    <a 
-                                      href={`https://sepolia.etherscan.io/tx/${result.transactionHash}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:underline mt-2"
-                                    >
-                                      View on Etherscan
-                                      <ExternalLinkIcon className="h-3 w-3 ml-1" />
-                                    </a>
-                                  </div>
-                                ) : (
-                                  <div>
-                                    <p className="text-red-600 dark:text-red-400">{result.error}</p>
-                                    {result.error.includes("Delegation not set up") && (
-                                      <p className="text-sm mt-2">
-                                        Please set up delegation using the panel above before creating tokens.
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
-                          </div>
-                        );
-                      }
-                    } else {
-                      return (
-                        <div key={toolCallId}>
-                          {toolName === "displayBalance" ? (
-                            <div className="flex justify-end mt-2">
-                              <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded-md text-sm flex items-center space-x-2">
-                                <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Loading balance...</span>
-                              </div>
-                            </div>
-                          ) : toolName === "deployERC20" ? (
-                            <div className="flex justify-end mt-2">
-                              <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-md text-sm flex items-center space-x-2">
-                                <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Deploying your token...</span>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    }
-                  })}
+                  {message.toolInvocations && (
+                    <pre>
+                      {JSON.stringify(message.toolInvocations, null, 2)}
+                    </pre>
+                  )}
                 </div>
               </div>
             ))}
@@ -326,23 +224,43 @@ export const Chat = () => {
             <Input
               value={input}
               onChange={handleInputChange}
-              placeholder={delegationEnabled 
-                ? "Ask me to create a token for you..." 
-                : "Type a message..."}
+              placeholder={
+                delegationEnabled
+                  ? "Ask me to create a token for you..."
+                  : "Type a message..."
+              }
               className="flex-1"
               disabled={isLoading}
             />
             <Button type="submit" disabled={isLoading}>
               {isLoading ? (
-                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  className="animate-spin h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
-              ) : "Send"}
+              ) : (
+                "Send"
+              )}
             </Button>
           </form>
         </div>
-        
+
         {/* Token List Panel */}
         <div className="md:col-span-1">
           <Card className="h-full">
@@ -374,7 +292,8 @@ export const Chat = () => {
                             href={`https://sepolia.etherscan.io/token/${token.address}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center mt-1">
+                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center mt-1"
+                          >
                             View Token
                             <ExternalLinkIcon className="h-3 w-3 ml-1" />
                           </a>
@@ -385,14 +304,18 @@ export const Chat = () => {
                 </div>
               ) : delegationEnabled ? (
                 <div className="flex flex-col items-center justify-center h-[300px] text-center p-4">
-                  <p className="text-gray-500 dark:text-gray-400 mb-2">No tokens created yet</p>
+                  <p className="text-gray-500 dark:text-gray-400 mb-2">
+                    No tokens created yet
+                  </p>
                   <p className="text-sm text-gray-400 dark:text-gray-500">
                     Ask the AI to create a token for you
                   </p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-[300px] text-center p-4">
-                  <p className="text-gray-500 dark:text-gray-400 mb-2">Delegation not set up</p>
+                  <p className="text-gray-500 dark:text-gray-400 mb-2">
+                    Delegation not set up
+                  </p>
                   <p className="text-sm text-gray-400 dark:text-gray-500">
                     Set up delegation to create tokens
                   </p>

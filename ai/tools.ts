@@ -1,10 +1,27 @@
 import type { Hex } from "viem";
-import type { DelegationStruct } from "@metamask-private/delegator-core-viem";
+import type {
+  DelegationStruct,
+  ExecutionMode,
+  ExecutionStruct,
+} from "@metamask-private/delegator-core-viem";
 import {
   DelegationStorageClient,
   DelegationStoreFilter,
   DelegationStorageEnvironment,
+  DelegationFramework,
+  SINGLE_DEFAULT_MODE,
 } from "@metamask-private/delegator-core-viem";
+import { tool as createTool } from "ai";
+import { z } from "zod";
+import { encodeFunctionData } from "viem";
+import {
+  Implementation,
+  toMetaMaskSmartAccount,
+} from "@metamask-private/delegator-core-viem";
+import { publicClient } from "@/wagmi.config";
+import { privateKeyToAccount } from "viem/accounts";
+import { bundler, pimlicoClient } from "@/lib/services/bundler";
+import { FACTORY_ABI } from "@/constants";
 
 // Delegation Storage Singleton
 let delegationStorageInstance: DelegationStorageClient | null = null;
@@ -27,7 +44,10 @@ const logStorageConfig = (apiKey?: string, apiKeyId?: string) => {
     hasSpecialChars: apiKeyId?.match(/[^a-zA-Z0-9]/) ? true : false,
   });
   console.log("Environment:", DelegationStorageEnvironment.dev);
-  console.log("Running on:", typeof window !== "undefined" ? "client" : "server");
+  console.log(
+    "Running on:",
+    typeof window !== "undefined" ? "client" : "server"
+  );
   console.groupEnd();
 };
 
@@ -51,7 +71,8 @@ export const getDelegationStorageClient = (): DelegationStorageClient => {
         apiKey,
         apiKeyId,
         environment: DelegationStorageEnvironment.dev,
-        fetcher: typeof window !== "undefined" ? window.fetch.bind(window) : undefined,
+        fetcher:
+          typeof window !== "undefined" ? window.fetch.bind(window) : undefined,
       });
       console.log("DelegationStorageClient initialized successfully");
     } catch (error) {
@@ -122,12 +143,20 @@ export const getDelegationChain = async (hash: Hex) => {
  */
 export const fetchDelegations = async (
   address: Hex,
-  filter: DelegationStoreFilter,
+  filter: DelegationStoreFilter
 ) => {
   try {
-    console.log("Fetching delegations for address:", address, "filter:", filter);
+    console.log(
+      "Fetching delegations for address:",
+      address,
+      "filter:",
+      filter
+    );
     const delegationStorageClient = getDelegationStorageClient();
-    const result = await delegationStorageClient.fetchDelegations(address, filter);
+    const result = await delegationStorageClient.fetchDelegations(
+      address,
+      filter
+    );
     console.log("Delegations fetched:", result);
     return result;
   } catch (error) {
@@ -142,11 +171,11 @@ export const fetchDelegations = async (
  */
 export const getDelegationInfoFromSession = () => {
   if (typeof window === "undefined") return null;
-  
+
   try {
-    const delegationInfoStr = sessionStorage.getItem('aiDelegateInfo');
+    const delegationInfoStr = sessionStorage.getItem("aiDelegateInfo");
     if (!delegationInfoStr) return null;
-    
+
     return JSON.parse(delegationInfoStr);
   } catch (error) {
     console.error("Error retrieving delegation info from session:", error);
@@ -160,18 +189,18 @@ export const getDelegationInfoFromSession = () => {
  */
 export const getFullDelegationFromSession = () => {
   if (typeof window === "undefined") return null;
-  
+
   try {
-    const delegationStr = sessionStorage.getItem('delegation');
+    const delegationStr = sessionStorage.getItem("delegation");
     if (!delegationStr) return null;
-    
+
     const delegation = JSON.parse(delegationStr);
-    
+
     // Convert string salt back to BigInt
-    if (delegation && typeof delegation.salt === 'string') {
+    if (delegation && typeof delegation.salt === "string") {
       delegation.salt = BigInt(delegation.salt);
     }
-    
+
     return delegation;
   } catch (error) {
     console.error("Error retrieving delegation from session:", error);
@@ -184,56 +213,59 @@ export const getFullDelegationFromSession = () => {
  */
 export const clearDelegationSession = () => {
   if (typeof window === "undefined") return;
-  
-  sessionStorage.removeItem('aiDelegateInfo');
-  sessionStorage.removeItem('delegation');
-  sessionStorage.removeItem('aiDelegatePrivateKey');
+
+  sessionStorage.removeItem("aiDelegateInfo");
+  sessionStorage.removeItem("delegation");
+  sessionStorage.removeItem("aiDelegatePrivateKey");
 };
 
 // Export the AI tool definition
-export const tools = [
-  {
-    name: "fetchDelegations",
-    description: "Fetch delegations for a wallet address",
-    parameters: {
-      type: "object",
-      properties: {
-        address: {
-          type: "string",
-          description: "The wallet address to fetch delegations for (must be a valid Ethereum address starting with 0x)"
-        },
-        filter: {
-          type: "string",
-          enum: ["Given", "Received"],
-          description: "Whether to fetch delegations given by this address or received by this address"
-        }
-      },
-      required: ["address", "filter"]
-    }
-  },
-  {
-    name: "createToken",
-    description: "Create a token using delegated permissions",
-    parameters: {
-      type: "object",
-      properties: {
-        name: {
-          type: "string",
-          description: "Name of the token to create"
-        },
-        symbol: {
-          type: "string",
-          description: "Symbol of the token (usually 3-4 characters)"
-        },
-        totalSupply: {
-          type: "string",
-          description: "Total supply of the token (as a string representing the number of tokens)"
-        }
-      },
-      required: ["name", "symbol", "totalSupply"]
-    }
-  }
-];
+// export const tools = [
+//   {
+//     name: "fetchDelegations",
+//     description: "Fetch delegations for a wallet address",
+//     parameters: {
+//       type: "object",
+//       properties: {
+//         address: {
+//           type: "string",
+//           description: "The wallet address to fetch delegations for (must be a valid Ethereum address starting with 0x)"
+//         },
+//         filter: {
+//           type: "string",
+//           enum: ["Given", "Received"],
+//           description: "Whether to fetch delegations given by this address or received by this address"
+//         }
+//       },
+//       required: ["address", "filter"]
+//     }
+//   },
+//   {
+//     name: "createToken",
+//     description: "Create a token using delegated permissions",
+//     parameters: {
+//       type: "object",
+//       properties: {
+//         name: {
+//           type: "string",
+//           description: "Name of the token to create"
+//         },
+//         symbol: {
+//           type: "string",
+//           description: "Symbol of the token (usually 3-4 characters)"
+//         },
+//         totalSupply: {
+//           type: "string",
+//           description: "Total supply of the token (as a string representing the number of tokens)"
+//         }
+//       },
+//       required: ["name", "symbol", "totalSupply"]
+//     }
+//   }
+// ];
 
-// Export store filter enum for use in components
-export { DelegationStoreFilter };
+const createTokenTool = createTool({""});
+
+export const tools = {
+  createToken: createTokenTool,
+};
