@@ -296,7 +296,7 @@ export function DelegationManager() {
 
   const getUserOperations = async () => {
     const userOperations = await bundler.getUserOperationReceipt({
-      hash: "0x9768b5d66955bb9a469ede6a906aaf70287da7dd0ee83e4f5c1b7a8720bd416b",
+      hash: "0x3e0173b25abefb3e26f050343d65501f2bdec33d7b9466bb6a42eb35a7912752",
     });
 
     console.log("User operations:", userOperations);
