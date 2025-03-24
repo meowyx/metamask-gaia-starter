@@ -219,50 +219,7 @@ export const clearDelegationSession = () => {
   sessionStorage.removeItem("aiDelegatePrivateKey");
 };
 
-// Export the AI tool definition
-// export const tools = [
-//   {
-//     name: "fetchDelegations",
-//     description: "Fetch delegations for a wallet address",
-//     parameters: {
-//       type: "object",
-//       properties: {
-//         address: {
-//           type: "string",
-//           description: "The wallet address to fetch delegations for (must be a valid Ethereum address starting with 0x)"
-//         },
-//         filter: {
-//           type: "string",
-//           enum: ["Given", "Received"],
-//           description: "Whether to fetch delegations given by this address or received by this address"
-//         }
-//       },
-//       required: ["address", "filter"]
-//     }
-//   },
-//   {
-//     name: "createToken",
-//     description: "Create a token using delegated permissions",
-//     parameters: {
-//       type: "object",
-//       properties: {
-//         name: {
-//           type: "string",
-//           description: "Name of the token to create"
-//         },
-//         symbol: {
-//           type: "string",
-//           description: "Symbol of the token (usually 3-4 characters)"
-//         },
-//         totalSupply: {
-//           type: "string",
-//           description: "Total supply of the token (as a string representing the number of tokens)"
-//         }
-//       },
-//       required: ["name", "symbol", "totalSupply"]
-//     }
-//   }
-// ];
+
 
 const createTokenTool = createTool({""});
 
