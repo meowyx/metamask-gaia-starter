@@ -2,10 +2,9 @@
 
 ## 🌟 Overview
 
-The MetaMask Gaia DTK Starter is a powerful Next.js template that seamlessly integrates GaiaNet AI's advanced capabilities with MetaMask's Developer Toolkit (DTK). This project enables developers to build sophisticated blockchain applications with AI-enhanced functionalities while leveraging MetaMask's secure wallet infrastructure.
+The MetaMask Gaia DTK Starter is a powerful Next.js template that seamlessly integrates Gaia's advanced capabilities with MetaMask's Developer Toolkit (DTK). This project allows developers to build sophisticated blockchain applications with AI-enhanced functionalities while leveraging MetaMask's secure wallet infrastructure.
 
 ![Gaia Delegation Toolkit Gif](./gaia-dtk-2.gif)
-
 
 The starter includes a full ERC20 token creation system through an integrated factory contract, allowing users to deploy custom tokens directly through the application. Combined with AI-powered interactions, this creates a powerful platform for building next-generation decentralized applications.
 
@@ -14,7 +13,7 @@ The starter includes a full ERC20 token creation system through an integrated fa
 - **AI-Powered Interactions**: Utilize GaiaNet AI to create intelligent and responsive dApp experiences
 - **ERC20 Token Creation**: Create custom ERC20 tokens through the integrated factory contract
 - **Secure Blockchain Integration**: Connect with the Ethereum ecosystem through MetaMask's trusted wallet infrastructure
-- **Delegation Management**: Built-in system for managing user-to-AI agent delegations
+- **Delegation Management**: Metamask's Delegation Toolkit for managing user-to-AI agent delegations
 - **Bundler Service Integration**: Pre-configured connection to bundler services for transaction handling
 - **Modern UI Components**: Ready-made UI components including chat interfaces, cards, and inputs
 - **Next.js App Router**: Built on Next.js 13+ with the new App Router architecture
@@ -184,7 +183,7 @@ erc20-factory/
 2. Create or import a wallet
 3. Connect your dApp using the provided hooks in the starter
 
-### GaiaNet AI Integration
+### Gaia Integration
 
 1. Sign up for an API key at [GaiaNet AI](https://gaianet.ai)
 2. Add your API key to the `.env` file under `GAIA_API_KEY`
@@ -208,7 +207,7 @@ For more detailed information about the technologies used in this starter:
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [MetaMask Documentation](https://docs.metamask.io/)
-- [GaiaNet AI Documentation](https://docs.gaianet.ai/)
+- [Gaia Documentation](https://docs.gaianet.ai/)
 - [pnpm Documentation](https://pnpm.io/documentation)
 
 
@@ -227,7 +226,7 @@ Please ensure your code follows the project's coding standards and includes appr
 
 ## 🙏 Acknowledgements
 
-- [MetaMask](https://metamask.io/) for their Developer Toolkit
-- [GaiaNet AI](https://gaianet.ai/) for their AI platform
+- [MetaMask](https://metamask.io/) for their Delegation Toolkit.
+- [Gaia](https://gaianet.ai/) for their AI platform
 - [Next.js](https://nextjs.org/) for the React framework
-- [Vercel](https://vercel.com/) for hosting and deployment support
+- [Vercel AI SDK](https://sdk.vercel.ai/) for The AI Toolkit for TypeScript
