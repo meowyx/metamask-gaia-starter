@@ -185,7 +185,7 @@ erc20-factory/
 
 ### Gaia Integration
 
-1. Sign up for an API key at [GaiaNet AI](https://gaianet.ai)
+1. Sign up for an API key ober [here](https://gaianet.ai)
 2. Add your API key to the `.env` file under `GAIA_API_KEY`
 3. Set the model base URL in the `.env` file under `GAIA_MODEL_BASE_URL`
 4. Use the pre-configured AI tools in `ai/tools.ts` to interact with GaiaNet features
